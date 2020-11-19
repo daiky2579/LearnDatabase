@@ -585,18 +585,117 @@ FROM (HOCVIEN HV JOIN KETQUATHI KQ ON HV.MAHV = KQ.MAHV) JOIN MONHOC MH ON MH.MA
 WHERE MH.MAMH = 'Co So Du Lieu'
 --------------------------------Lab4--------------------------------     
 --19. Khoa nào (mã khoa, tên khoa) được thành lập sớm nhất.
+SELECT MAKHOA, TENKHOA
+FROM KHOA K1
+WHERE NGTLAP <= ALL (
+	SELECT NGTLAP
+	FROM KHOA K2
+)
 --20. Có bao nhiêu giáo viên có học hàm là “GS” hoặc “PGS”.
+SELECT COUNT(MAGV) AS GV_GS_PGS
+FROM GIAOVIEN 
+WHERE GIAOVIEN.HOCHAM IN ('GS','PGS')
 --21. Thống kê có bao nhiêu giáo viên có học vị là “CN”, “KS”, “Ths”, “TS”, “PTS” trong mỗi khoa.
+SELECT K.MAKHOA, K.TENKHOA, COUNT(GV.MAGV) AS GV_HOCVI
+FROM GIAOVIEN GV JOIN KHOA K ON GV.MAKHOA = K.MAKHOA
+WHERE GV.HOCVI IN ('CN','KS','Ths','TS','PTS')
+GROUP BY K.MAKHOA, K.TENKHOA 
 --22. Mỗi môn học thống kê số lượng học viên theo kết quả (đạt và không đạt).
+SELECT KQ1.MAMH, KQ1.DAT, KQ2.KDAT
+FROM
+(SELECT KQ.MAMH, COUNT(HV.MAHV) AS DAT
+FROM KETQUATHI KQ JOIN HOCVIEN HV ON KQ.MAHV = HV.MAHV
+WHERE KQ.KQUA = 'Dat'
+GROUP BY KQ.MAMH) AS KQ1
+JOIN 
+(SELECT KQ.MAMH, COUNT(HV.MAHV) AS KDAT
+FROM KETQUATHI KQ JOIN HOCVIEN HV ON KQ.MAHV = HV.MAHV
+WHERE KQ.KQUA = 'Khong dat'
+GROUP BY KQ.MAMH) AS KQ2
+ON KQ1.MAMH = KQ2.MAMH
 --23. Tìm giáo viên (mã giáo viên, họ tên) là giáo viên chủ nhiệm của một lớp, đồng thời dạy cho lớp đó ít nhất một môn học.
+SELECT L.MALOP, GV.MAGV, GV.HOTEN 
+FROM GIAOVIEN GV JOIN LOP L ON GV.MAGV = L.MAGVCN
+WHERE GV.MAGV IN (
+	SELECT MAGV 
+	FROM GIANGDAY
+	WHERE GIANGDAY.MALOP = L.MALOP
+)
 --24. Tìm họ tên lớp trưởng của lớp có sỉ số cao nhất.
---25. * Tìm họ tên những LOPTRG thi không đạt quá 3 môn (mỗi môn đều thi không đạt ở tất cả các lần thi).
+SELECT L.TRGLOP, CONCAT(HV.HO,' ',HV.TEN) AS HOTEN
+FROM LOP L JOIN HOCVIEN HV ON HV.MAHV = L.TRGLOP
+WHERE L.SISO >= ALL (
+	SELECT SISO 
+	FROM LOP
+)
+--?25. * Tìm họ tên những LOPTRG thi không đạt quá 3 môn (mỗi môn đều thi không đạt ở tất cả các lần thi).
+SELECT CONCAT(HV.HO,' ',HV.TEN) AS HOTEN
+FROM LOP L JOIN HOCVIEN HV ON HV.MAHV = L.TRGLOP
+WHERE HV.MAHV IN (
+	SELECT KQ.MAHV
+	FROM KETQUATHI KQ JOIN (
+		SELECT KQ1.MAHV, COUNT(MAMH) AS SOMH
+		FROM KETQUATHI KQ1
+		WHERE KQUA = 'Khong dat'
+		GROUP BY MAHV 
+	) AS KQ1 ON KQ.MAHV = KQ1.MAHV
+	WHERE KQ1.SOMH >= 3
+)
 --26. Tìm học viên (mã học viên, họ tên) có số môn đạt điểm 9,10 nhiều nhất.
---27. Trong từng lớp, tìm học viên (mã học viên, họ tên) có số môn đạt điểm 9,10 nhiều nhất.
+SELECT TOP 1 HV.MAHV, CONCAT(HV.HO,' ',HV.TEN) AS HOTEN
+FROM HOCVIEN HV
+JOIN
+(SELECT KQ.MAHV, COUNT(KQ.MAMH) AS MON_9_10
+FROM KETQUATHI KQ 
+WHERE KQ.DIEM IN (9,10)
+GROUP BY KQ.MAHV) KQ1 
+ON KQ1.MAHV = HV.MAHV
+ORDER BY MON_9_10 DESC 
+--?27. Trong từng lớp, tìm học viên (mã học viên, họ tên) có số môn đạt điểm 9,10 nhiều nhất.
+SELECT HV.MALOP, HV.MAHV, CONCAT(HV.HO,' ',HV.TEN) AS HOTEN
+FROM (HOCVIEN HV JOIN LOP L ON HV.MALOP = L.MALOP)
+JOIN
+	(	SELECT KQ.MAHV, COUNT(KQ.MAMH) AS MON_9_10
+		FROM KETQUATHI KQ 
+		WHERE KQ.DIEM IN (9,10)
+		GROUP BY KQ.MAHV) KQ1 
+ON KQ1.MAHV = HV.MAHV
 --28. Trong từng học kỳ của từng năm, mỗi giáo viên phân công dạy bao nhiêu môn học, bao nhiêu lớp.
---29. Trong từng học kỳ của từng năm, tìm giáo viên (mã giáo viên, họ tên) giảng dạy nhiều nhất.
+SELECT GD.NAM, GD.HOCKY, GV.HOTEN, COUNT(GD.MAMH) AS SOMON, COUNT(GD.MALOP) AS SOLOP 
+FROM GIANGDAY GD JOIN GIAOVIEN GV ON GD.MAGV = GV.MAGV 
+GROUP BY GD.NAM, GD.HOCKY, GV.HOTEN 
+ORDER BY GD.NAM, GD.HOCKY
+--?29. Trong từng học kỳ của từng năm, tìm giáo viên (mã giáo viên, họ tên) giảng dạy nhiều nhất.
+SELECT GV.MAGV, GV.HOTEN 
+FROM GIAOVIEN GV JOIN (
+	SELECT GD.NAM, GD.HOCKY, GV.MAGV, COUNT(GD.MAMH) AS SOMON, COUNT(GD.MALOP) AS SOLOP 
+	FROM GIANGDAY GD JOIN GIAOVIEN GV ON GD.MAGV = GV.MAGV 
+	GROUP BY GD.NAM, GD.HOCKY, GV.HOTEN 
+) T ON  T.MAGV = GV.MAGV 
+ORDER BY T.SOLOP DESC 
 --30. Tìm môn học (mã môn học, tên môn học) có nhiều học viên thi không đạt (ở lần thi thứ 1) nhất.
+SELECT TOP 1 MH.MAMH, MH.TENMH
+FROM MONHOC MH JOIN 
+(
+	SELECT KQ.MAMH, COUNT(KQ.MAHV) AS THIROT
+	FROM KETQUATHI KQ 
+	WHERE KQ.LANTHI = '1' AND KQ.KQUA = 'Khong dat'
+	GROUP BY KQ.MAMH 
+) T ON MH.MAMH = T.MAMH 
+ORDER BY THIROT DESC
 --31. Tìm học viên (mã học viên, họ tên) thi môn nào cũng đạt (chỉ xét lần thi thứ 1).
+SELECT HV.MAHV, CONCAT(HV.HO,' ',HV.TEN) AS HOTEN 
+FROM HOCVIEN HV 
+WHERE NOT EXISTS (
+	SELECT *
+	FROM MONHOC MH 
+	WHERE NOT EXISTS (
+		SELECT *
+		FROM KETQUATHI KQ 
+		WHERE KQ.MAMH = MH.MAMH AND KQ.MAHV = HV.MAHV AND KQ.LANTHI = '1' AND KQ.KQUA = 'Dat'
+	)
+)
+use QLGV
 --32. * Tìm học viên (mã học viên, họ tên) thi môn nào cũng đạt (chỉ xét lần thi sau cùng).
 --33. * Tìm học viên (mã học viên, họ tên) đã thi tất cả các môn đều đạt (chỉ xét lần thi thứ 1).
 --34. * Tìm học viên (mã học viên, họ tên) đã thi tất cả các môn đều đạt  (chỉ xét lần thi sau cùng).
