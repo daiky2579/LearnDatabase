@@ -712,6 +712,27 @@ FROM MONHOC MH JOIN
 ) T ON MH.MAMH = T.MAMH 
 ORDER BY THIROT DESC
 --31. Tìm học viên (mã học viên, họ tên) thi môn nào cũng đạt (chỉ xét lần thi thứ 1).
+SELECT MAHV,CONCAT(HO,' ',TEN) AS HOTEN 
+FROM HOCVIEN
+WHERE MAHV NOT IN (
+	SELECT DISTINCT MAHV
+	FROM KETQUATHI
+	WHERE KQUA='Khong Dat' AND LANTHI=1)
+--32. * Tìm học viên (mã học viên, họ tên) thi môn nào cũng đạt (chỉ xét lần thi sau cùng).
+SELECT MAHV, CONCAT(HO,' ',TEN) AS HOTEN 
+FROM HOCVIEN
+WHERE MAHV NOT IN (
+	SELECT KQ1.MAHV 
+	FROM KETQUATHI KQ1
+	WHERE KQ1.KQUA='Khong dat'
+	GROUP BY KQ1.MAHV, KQ1.LANTHI
+	HAVING KQ1.LANTHI = (
+		SELECT MAX(KQ2.LANTHI)
+		FROM KETQUATHI KQ2
+		WHERE KQ1.MAHV = KQ2.MAHV
+	)
+)
+--33. * Tìm học viên (mã học viên, họ tên) đã thi tất cả các môn đều đạt (chỉ xét lần thi thứ 1).
 SELECT HV.MAHV, CONCAT(HV.HO,' ',HV.TEN) AS HOTEN 
 FROM HOCVIEN HV 
 WHERE NOT EXISTS (
@@ -723,13 +744,7 @@ WHERE NOT EXISTS (
 		WHERE KQ.MAMH = MH.MAMH AND KQ.MAHV = HV.MAHV AND KQ.LANTHI = '1' AND KQ.KQUA = 'Dat'
 	)
 )
-SELECT MAHV, MAMH,KQUA 
-FROM KETQUATHI
-WHERE LANTHI = '1' AND KQUA = 'Dat'
-SELECT MAMH 
-FROM MONHOC 
-use QLGV 
---32. * Tìm học viên (mã học viên, họ tên) thi môn nào cũng đạt (chỉ xét lần thi sau cùng).
+--34. * Tìm học viên (mã học viên, họ tên) đã thi tất cả các môn đều đạt  (chỉ xét lần thi sau cùng).
 SELECT HV.MAHV, CONCAT(HV.HO,' ',HV.TEN) AS HOTEN 
 FROM HOCVIEN HV 
 WHERE NOT EXISTS (
@@ -745,7 +760,21 @@ WHERE NOT EXISTS (
 		)
 	)
 )
---33. * Tìm học viên (mã học viên, họ tên) đã thi tất cả các môn đều đạt (chỉ xét lần thi thứ 1).
-
---34. * Tìm học viên (mã học viên, họ tên) đã thi tất cả các môn đều đạt  (chỉ xét lần thi sau cùng).
 --35. ** Tìm học viên (mã học viên, họ tên) có điểm thi cao nhất trong từng môn (lấy điểm ở lần thi sau cùng).
+SELECT TOP 1 KQ.MAHV, KQ.MAMH, KQ.DIEM
+FROM KETQUATHI KQ 
+WHERE KQ.LANTHI = (
+	SELECT MAX(KQ2.LANTHI)
+	FROM KETQUATHI KQ2 
+	WHERE KQ2.MAHV = KQ.MAHV AND KQ2.MAMH = KQ.MAMH 
+)
+GROUP BY KQ.MAHV, KQ.MAMH, KQ.DIEM 
+HAVING KQ.DIEM >= ALL (
+	SELECT KQ1.DIEM
+	FROM KETQUATHI KQ1 
+	WHERE KQ1.MAHV = KQ.MAHV AND KQ1.MAHV = KQ.MAMH AND KQ1.LANTHI = (
+		SELECT MAX(KQ3.LANTHI)
+		FROM KETQUATHI KQ3 
+		WHERE KQ3.MAMH = KQ1.MAMH AND KQ3.MAHV = KQ1.MAHV
+	)
+)
