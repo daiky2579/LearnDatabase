@@ -651,7 +651,7 @@ WHERE KQ.DIEM IN (9,10)
 GROUP BY KQ.MAHV) KQ1 
 ON KQ1.MAHV = HV.MAHV
 ORDER BY MON_9_10 DESC 
---?27. Trong từng lớp, tìm học viên (mã học viên, họ tên) có số môn đạt điểm 9,10 nhiều nhất.
+--27. Trong từng lớp, tìm học viên (mã học viên, họ tên) có số môn đạt điểm 9,10 nhiều nhất.
 SELECT HV.MALOP, HV.MAHV, CONCAT(HV.HO,' ',HV.TEN) AS HOTEN
 FROM (HOCVIEN HV JOIN LOP L ON HV.MALOP = L.MALOP)
 JOIN
@@ -660,19 +660,47 @@ JOIN
 		WHERE KQ.DIEM IN (9,10)
 		GROUP BY KQ.MAHV) KQ1 
 ON KQ1.MAHV = HV.MAHV
+------------------------------
+SELECT H.MALOP, K.MAHV, COUNT(*) AS SODIEM_9_10 INTO LOP_DIEM
+FROM KETQUATHI K, HOCVIEN H 
+WHERE K.MAHV = H.MAHV AND K.DIEM IN (9,10)
+GROUP BY H.MALOP, K.MAHV
+
+
+SELECT LD1.MALOP, LD1.MAHV 
+FROM LOP_DIEM LD1
+WHERE LD1.SODIEM_9_10 >= ALL (
+	SELECT LD2.SODIEM_9_10
+	FROM LOP_DIEM LD2 
+	WHERE LD1.MALOP = LD2.MALOP
+) 
+
+-------------------------------
+SELECT H.MALOP, K.MAHV, CONCAT(H.HO,' ',H.TEN) AS HOTEN,COUNT(*) AS SODIEM_9_10 
+FROM KETQUATHI K, HOCVIEN H 
+WHERE K.MAHV = H.MAHV AND K.DIEM IN (9,10)
+GROUP BY H.MALOP, K.MAHV, CONCAT(H.HO,' ',H.TEN)
+HAVING COUNT(*) >= ALL (
+	SELECT COUNT(*)
+	FROM KETQUATHI K1, HOCVIEN H1 
+	WHERE K1.DIEM IN (9,10) AND K1.MAHV = H1.MAHV AND H1.MALOP = H.MALOP 
+	GROUP BY K1.MAHV 
+)
 --28. Trong từng học kỳ của từng năm, mỗi giáo viên phân công dạy bao nhiêu môn học, bao nhiêu lớp.
 SELECT GD.NAM, GD.HOCKY, GV.HOTEN, COUNT(GD.MAMH) AS SOMON, COUNT(GD.MALOP) AS SOLOP 
 FROM GIANGDAY GD JOIN GIAOVIEN GV ON GD.MAGV = GV.MAGV 
 GROUP BY GD.NAM, GD.HOCKY, GV.HOTEN 
 ORDER BY GD.NAM, GD.HOCKY
 --?29. Trong từng học kỳ của từng năm, tìm giáo viên (mã giáo viên, họ tên) giảng dạy nhiều nhất.
-SELECT GV.MAGV, GV.HOTEN 
-FROM GIAOVIEN GV JOIN (
-	SELECT GD.NAM, GD.HOCKY, GV.MAGV, COUNT(GD.MAMH) AS SOMON, COUNT(GD.MALOP) AS SOLOP 
-	FROM GIANGDAY GD JOIN GIAOVIEN GV ON GD.MAGV = GV.MAGV 
-	GROUP BY GD.NAM, GD.HOCKY, GV.HOTEN 
-) T ON  T.MAGV = GV.MAGV 
-ORDER BY T.SOLOP DESC 
+SELECT GD.NAM, GD.HOCKY, GV.MAGV, GV.HOTEN, COUNT(*) AS SOLOP  
+FROM GIANGDAY GD JOIN GIAOVIEN GV ON GD.MAGV = GV.MAGV 
+GROUP BY GD.NAM, GD.HOCKY, GV.MAGV, GV.HOTEN
+HAVING COUNT(*) >= ALL (
+	SELECT COUNT(*)
+	FROM GIANGDAY GD1 JOIN GIAOVIEN GV1 ON GD1.MAGV = GV1.MAGV 
+	WHERE GD.HOCKY = GD1.HOCKY  
+	GROUP BY GD1.NAM, GD1.HOCKY
+)
 --30. Tìm môn học (mã môn học, tên môn học) có nhiều học viên thi không đạt (ở lần thi thứ 1) nhất.
 SELECT TOP 1 MH.MAMH, MH.TENMH
 FROM MONHOC MH JOIN 
@@ -695,8 +723,29 @@ WHERE NOT EXISTS (
 		WHERE KQ.MAMH = MH.MAMH AND KQ.MAHV = HV.MAHV AND KQ.LANTHI = '1' AND KQ.KQUA = 'Dat'
 	)
 )
-use QLGV
+SELECT MAHV, MAMH,KQUA 
+FROM KETQUATHI
+WHERE LANTHI = '1' AND KQUA = 'Dat'
+SELECT MAMH 
+FROM MONHOC 
+use QLGV 
 --32. * Tìm học viên (mã học viên, họ tên) thi môn nào cũng đạt (chỉ xét lần thi sau cùng).
+SELECT HV.MAHV, CONCAT(HV.HO,' ',HV.TEN) AS HOTEN 
+FROM HOCVIEN HV 
+WHERE NOT EXISTS (
+	SELECT *
+	FROM MONHOC MH 
+	WHERE NOT EXISTS (
+		SELECT *
+		FROM KETQUATHI KQ 
+		WHERE KQ.MAMH = MH.MAMH AND KQ.MAHV = HV.MAHV AND KQ.KQUA = 'Dat' AND KQ.LANTHI >= ALL (
+			SELECT KQ1.LANTHI 
+			FROM KETQUATHI KQ1 
+			WHERE KQ.MAHV = KQ1.MAHV AND KQ.MAMH = KQ1.MAMH 
+		)
+	)
+)
 --33. * Tìm học viên (mã học viên, họ tên) đã thi tất cả các môn đều đạt (chỉ xét lần thi thứ 1).
+
 --34. * Tìm học viên (mã học viên, họ tên) đã thi tất cả các môn đều đạt  (chỉ xét lần thi sau cùng).
 --35. ** Tìm học viên (mã học viên, họ tên) có điểm thi cao nhất trong từng môn (lấy điểm ở lần thi sau cùng).
