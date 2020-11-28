@@ -149,13 +149,6 @@ CONSTRAINT CK_GD_HK CHECK(HOCKY<=3)
 --8--
 ALTER TABLE GIAOVIEN 
 ADD CONSTRAINT CK_GV_HVI CHECK(HOCVI IN ('CN','KS','Ths','TS','PTS'))
---9--draft 
-ALTER TABLE LOP
-ADD CONSTRAINT CK_LOP_HV CHECK(TRGLOP IN (
-	SELECT HOCVIEN.MAHV
-	FROM HOCVIEN
-))
---10--
 --------------------------------Lab2--------------------------------
 SET DATEFORMAT dmy
 -- Thêm gữ liệu vào bảng
@@ -778,3 +771,85 @@ HAVING KQ.DIEM >= ALL (
 		WHERE KQ3.MAMH = KQ1.MAMH AND KQ3.MAHV = KQ1.MAHV
 	)
 )
+--------------------------------Lab5-------------------------------- 
+--9. Lớp trưởng của một lớp phải là học viên của lớp đó.
+CREATE TRIGGER trg_loptrg_lop ON LOP 
+FOR INSERT, UPDATE 
+AS 
+BEGIN 
+	IF EXISTS (
+		SELECT *
+		FROM INSERTED I JOIN HOCVIEN H ON I.MALOP = H.MALOP
+		WHERE I.TRGLOP <> H.MAHV
+	)
+	BEGIN 
+		PRINT('LOI: LOP TRUONG KHONG HOP LE!')
+		ROLLBACK TRANSACTION
+	END
+	ELSE
+	BEGIN
+		PRINT('THEM MOI THANH CONG!')
+	END
+END
+--10. Trưởng khoa phải là giáo viên thuộc khoa và có học vị “TS” hoặc “PTS”.
+CREATE TRIGGER trg_trgkhoa_khoa ON KHOA
+FOR INSERT, UPDATE 
+AS 
+BEGIN 
+	IF EXISTS (
+		SELECT *
+		FROM INSERTED I JOIN GIAOVIEN GV ON I.MAKHOA = GV.MAKHOA
+		WHERE I.TRGKHOA NOT IN (GV.MAGV) OR GV.HOCVI NOT IN ('TS','PTS')
+	)
+	BEGIN 
+		PRINT('LOI: TRUONG KHOA KHONG HOP LE!')
+		ROLLBACK TRANSACTION
+	END
+	ELSE
+	BEGIN
+		PRINT('THEM MOI THANH CONG!')
+	END
+END
+--15. Học viên chỉ được thi một môn học nào đó khi lớp của học viên đã học xong môn học này.
+CREATE TRIGGER trg_ngthi_kqthi ON KETQUATHI
+FOR INSERT, UPDATE 
+AS 
+BEGIN 
+	IF EXISTS (
+		SELECT *
+		FROM INSERTED I JOIN GIANGDAY GD ON I.MAMH = GD.MAMH
+		WHERE I.NGTHI < GD.DENNGAY
+	)
+	BEGIN 
+		PRINT('LOI: NGAY THI KHONG HOP LE!')
+		ROLLBACK TRANSACTION
+	END
+	ELSE
+	BEGIN
+		PRINT('THEM MOI THANH CONG!')
+	END
+END
+--16. Mỗi học kỳ của một năm học, một lớp chỉ được học tối đa 3 môn.
+
+
+
+--17. Sỉ số của một lớp bằng với số lượng học viên thuộc lớp đó.
+CREATE TRIGGER trg_upd_siso ON HOCVIEN 
+FOR INSERT, UPDATE 
+AS 
+BEGIN
+	UPDATE LOP
+	SET SISO = (
+		SELECT COUNT(*)
+		FROM HOCVIEN JOIN LOP ON HOCVIEN.MALOP = LOP.MALOP
+	)
+	FROM HOCVIEN JOIN LOP ON HOCVIEN.MALOP = LOP.MALOP 
+	PRINT('SI SO LOP DA DUOC CAP NHAT!')
+END
+--18. Trong quan hệ DIEUKIEN giá trị của thuộc tính MAMH và MAMH_TRUOC trong cùng một bộ không được giống nhau (“A”,”A”) và cũng không tồn tại hai bộ (“A”,”B”) và (“B”,”A”).
+--19. Các giáo viên có cùng học vị, học hàm, hệ số lương thì mức lương bằng nhau.
+--20. Học viên chỉ được thi lại (lần thi >1) khi điểm của lần thi trước đó dưới 5.
+--21. Ngày thi của lần thi sau phải lớn hơn ngày thi của lần thi trước (cùng học viên, cùng môn học).
+--22. Học viên chỉ được thi những môn mà lớp của học viên đó đã học xong.
+--23. Khi phân công giảng dạy một môn học, phải xét đến thứ tự trước sau giữa các môn học (sau khi học xong những môn học phải học trước mới được học những môn liền sau).
+--24. Giáo viên chỉ được phân công dạy những môn thuộc khoa giáo viên đó phụ trách.
