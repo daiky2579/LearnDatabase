@@ -937,6 +937,64 @@ BEGIN
 		PRINT('THEM THANH CONG!')
 	END 
 END 
+USE QLGV
 --22. Học viên chỉ được thi những môn mà lớp của học viên đó đã học xong.
+CREATE TRIGGER trg_upd_thi ON KETQUATHI 
+FOR INSERT, UPDATE
+AS 
+BEGIN
+	IF EXISTS (
+		SELECT *
+		FROM GIANGDAY GD JOIN INSERTED I ON GD.MAMH = I.MAMH JOIN HOCVIEN HV ON HV.MAHV = I.MAHV
+		WHERE  I.NGTHI < I.NGTHI
+	)
+	BEGIN
+		PRINT('LOI: MON THI KHONG HOP LE!')
+		ROLLBACK TRANSACTION
+	END
+	ELSE 
+	BEGIN
+		PRINT('THEM THANH CONG!')
+	END
+END
 --23. Khi phân công giảng dạy một môn học, phải xét đến thứ tự trước sau giữa các môn học (sau khi học xong những môn học phải học trước mới được học những môn liền sau).
+CREATE TRIGGER trg_gday ON GIANGDAY 
+FOR INSERT, UPDATE 
+AS 
+BEGIN 
+	IF EXISTS (
+		SELECT *
+		FROM INSERTED I, DIEUKIEN DK 
+		WHERE I.MAMH = DK.MAMH AND DK.MAMH_TRUOC IN (
+			SELECT GD1.MAMH 
+			FROM GIANGDAY GD1
+			WHERE GD1.MAMH = DK.MAMH_TRUOC AND I.TUNGAY < GD1.DENNGAY
+		)
+	)
+	BEGIN
+		PRINT('LOI: MON THI KHONG HOP LE!')
+		ROLLBACK TRANSACTION
+	END
+	ELSE 
+	BEGIN
+		PRINT('THEM THANH CONG!')
+	END
+END
 --24. Giáo viên chỉ được phân công dạy những môn thuộc khoa giáo viên đó phụ trách.
+CREATE TRIGGER trg_upd_GV ON GIANGDAY
+FOR INSERT, UPDATE
+AS 
+BEGIN
+	IF EXISTS (
+		SELECT *
+		FROM GIANGDAY GD JOIN 
+	)
+	BEGIN
+		PRINT('LOI: GIAO VIEN CHI DAY NHUNG MON MA KHOA PHU TRACH!')
+		ROLLBACK TRANSACTION
+	END
+	ELSE 
+	BEGIN
+		PRINT('THEM THANH CONG!')
+	END
+END
