@@ -681,7 +681,7 @@ HAVING COUNT(*) >= ALL (
 	GROUP BY K1.MAHV 
 )
 --28. Trong từng học kỳ của từng năm, mỗi giáo viên phân công dạy bao nhiêu môn học, bao nhiêu lớp.
-SELECT GD.NAM, GD.HOCKY, GV.HOTEN, COUNT(GD.MAMH) AS SOMON, COUNT(GD.MALOP) AS SOLOP 
+SELECT GD.NAM, GD.HOCKY, GV.HOTEN, COUNT(DISTINCT GD.MAMH) AS SOMON, COUNT(GD.MALOP) AS SOLOP 
 FROM GIANGDAY GD JOIN GIAOVIEN GV ON GD.MAGV = GV.MAGV 
 GROUP BY GD.NAM, GD.HOCKY, GV.HOTEN 
 ORDER BY GD.NAM, GD.HOCKY
@@ -705,10 +705,11 @@ FROM MONHOC MH JOIN
 	GROUP BY KQ.MAMH 
 ) T ON MH.MAMH = T.MAMH 
 ORDER BY THIROT DESC
+use QLGV
 --31. Tìm học viên (mã học viên, họ tên) thi môn nào cũng đạt (chỉ xét lần thi thứ 1).
-SELECT MAHV,CONCAT(HO,' ',TEN) AS HOTEN 
-FROM HOCVIEN
-WHERE MAHV NOT IN (
+SELECT DISTINCT KETQUATHI.MAHV,CONCAT(HO,' ',TEN) AS HOTEN 
+FROM HOCVIEN JOIN KETQUATHI ON HOCVIEN.MAHV = KETQUATHI.MAHV
+WHERE KETQUATHI.MAHV NOT IN (
 	SELECT DISTINCT MAHV
 	FROM KETQUATHI
 	WHERE KQUA='Khong Dat' AND LANTHI=1)
@@ -830,10 +831,28 @@ BEGIN
 		PRINT('THEM MOI THANH CONG!')
 	END
 END
+USE QLGV
 --16. Mỗi học kỳ của một năm học, một lớp chỉ được học tối đa 3 môn.
-
-
-
+CREATE TRIGGER trg_upd_mh ON GIANGDAY
+FOR INSERT, UPDATE
+AS
+BEGIN
+	IF EXISTS (
+		SELECT *
+		FROM INSERTED I JOIN GIANGDAY GD ON I.MALOP = GD.MALOP 
+		WHERE I.NAM = GD.NAM AND I.HOCKY = GD.HOCKY
+		GROUP BY I.NAM, I.HOCKY
+		HAVING COUNT(I.MAMH) > 3
+	)
+	BEGIN
+		PRINT('LOI: MOI LOP CHI DUOC HOC TOI DA 3 MON HOC TRONG 1 HOC KI!')
+		ROLLBACK TRANSACTION
+	END 
+	ELSE 
+	BEGIN
+		PRINT('THEM MON HOC THANH CONG!')
+	END 
+END 
 --17. Sỉ số của một lớp bằng với số lượng học viên thuộc lớp đó.
 CREATE TRIGGER trg_upd_siso ON HOCVIEN 
 FOR INSERT, UPDATE 
@@ -848,9 +867,76 @@ BEGIN
 	PRINT('SI SO LOP DA DUOC CAP NHAT!')
 END
 --18. Trong quan hệ DIEUKIEN giá trị của thuộc tính MAMH và MAMH_TRUOC trong cùng một bộ không được giống nhau (“A”,”A”) và cũng không tồn tại hai bộ (“A”,”B”) và (“B”,”A”).
+CREATE TRIGGER trg_upd_dk ON DIEUKIEN
+FOR INSERT, UPDATE
+AS
+BEGIN
+	IF EXISTS (
+		SELECT *
+		FROM INSERTED I JOIN DIEUKIEN DK ON (I.MAMH = DK.MAMH)
+		WHERE I.MAMH = I.MAMH_TRUOC OR (I.MAMH = DK.MAMH_TRUOC AND I.MAMH_TRUOC = DK.MAMH)
+	)
+	BEGIN
+		PRINT('LOI: MAMH VA MAMH_TRUOC KHONG HOP LE!')
+		ROLLBACK TRANSACTION
+	END 
+	ELSE 
+	BEGIN
+		PRINT('THEM DIEU KIEN THANH CONG!')
+	END 
+END 
 --19. Các giáo viên có cùng học vị, học hàm, hệ số lương thì mức lương bằng nhau.
+CREATE TRIGGER trg_upd_mucluong ON GIAOVIEN 
+FOR INSERT, UPDATE 
+AS 
+BEGIN
+	UPDATE GIAOVIEN
+	SET MUCLUONG = (
+		SELECT GV.MUCLUONG
+		FROM GIAOVIEN GV, INSERTED
+		WHERE INSERTED.HOCVI = GV.HOCVI AND INSERTED.HOCHAM = GV.HOCHAM AND INSERTED.HESO = GV.HESO
+	)
+	FROM GIAOVIEN
+	PRINT('MUC LUONG DA DUOC CAP NHAT!')
+END
 --20. Học viên chỉ được thi lại (lần thi >1) khi điểm của lần thi trước đó dưới 5.
+CREATE TRIGGER trg_upd_kq ON KETQUATHI
+FOR INSERT, UPDATE
+AS
+BEGIN
+	IF EXISTS (
+		SELECT *
+		FROM KETQUATHI KQ, INSERTED I 
+		WHERE KQ.MAHV = I.MAHV AND KQ.LANTHI < I.LANTHI AND KQ.DIEM > 5
+	)
+	BEGIN
+		PRINT('LOI: CHI DUOC THI LAI NEU DIEM THI < 5!')
+		ROLLBACK TRANSACTION
+	END 
+	ELSE 
+	BEGIN
+		PRINT('THEM THANH CONG!')
+	END 
+END 
 --21. Ngày thi của lần thi sau phải lớn hơn ngày thi của lần thi trước (cùng học viên, cùng môn học).
+CREATE TRIGGER trg_upd_ngthi ON KETQUATHI
+FOR INSERT, UPDATE
+AS
+BEGIN
+	IF EXISTS (
+		SELECT *
+		FROM KETQUATHI KQ, INSERTED I 
+		WHERE KQ.MAHV = I.MAHV AND KQ.MAMH = I.MAMH AND KQ.LANTHI < I.LANTHI AND KQ.NGTHI > I.NGTHI
+	)
+	BEGIN
+		PRINT('LOI: NGAY THI KHONG HOP LE!')
+		ROLLBACK TRANSACTION
+	END 
+	ELSE 
+	BEGIN
+		PRINT('THEM THANH CONG!')
+	END 
+END 
 --22. Học viên chỉ được thi những môn mà lớp của học viên đó đã học xong.
 --23. Khi phân công giảng dạy một môn học, phải xét đến thứ tự trước sau giữa các môn học (sau khi học xong những môn học phải học trước mới được học những môn liền sau).
 --24. Giáo viên chỉ được phân công dạy những môn thuộc khoa giáo viên đó phụ trách.
